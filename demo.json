@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "frames": 0,
+  "warnings": [],
+  "turns": [
+    {
+      "id": "sample-response-1",
+      "finished": true,
+      "operations": [
+        {
+          "id": "sample-operation-1",
+          "queries": [
+            "beginner indoor gardening guide",
+            "site:example.com/guides/ indoor plants"
+          ],
+          "refs": [
+            "turn0search0"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "ref": "turn0search0",
+          "url": "https://example.com/guides/indoor-plants",
+          "title": "Fictional indoor gardening guide \u2014 demo only",
+          "domain": "example.com",
+          "kind": "search",
+          "linked": true
+        }
+      ]
+    }
+  ]
+}

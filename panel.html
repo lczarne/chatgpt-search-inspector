@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ChatGPT Search Inspector</title><link rel="stylesheet" href="panel.css?v=0.2.3"></head><body>
+<header><h1>ChatGPT Search Inspector</h1></header>
+<main><div id="status" role="status">Capture stopped</div><div class="actions"><button id="start" class="primary">Start</button><button id="stop" disabled>Stop</button><button id="clear">Clear</button></div>
+<p class="hint">Start before sending your question. Chrome will show a debugging banner. Close DevTools for this tab.</p>
+<div id="capture-progress" hidden><p id="progress-detail"></p><progress id="progress-bar" aria-label="Waiting for search data" hidden></progress></div>
+<div id="error" role="alert"></div><section class="stats"><div><strong id="queriesCount">0</strong><span>queries</span></div><div><strong id="sourcesCount">0</strong><span>search results</span></div></section>
+<label class="select-label" for="turn">Response</label><select id="turn"><option>No responses yet</option></select>
+<nav aria-label="View"><button data-tab="queries" aria-pressed="true">Queries</button><button data-tab="sources" aria-pressed="false">Sources</button><button data-tab="diagnostics" aria-pressed="false">Export</button></nav>
+<input id="filter" type="search" placeholder="Filter queries, domains and titles…" aria-label="Filter results">
+<div id="content"></div>
+</main><script type="module" src="panel.js?v=0.2.3"></script></body></html>
