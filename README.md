@@ -23,7 +23,7 @@ To update, replace the files and click **Reload** on the extension’s card in `
 - Response selection, filtering, and query copying.
 - Separate query and source CSV downloads in the **Export** tab.
 - Green status while capture is active and grey when stopped, with progress details below.
-- WebSocket capture, completed HTTP/SSE response parsing, and conversation-batch fallback with deduplication.
+- Live WebSocket and fetch/SSE capture, with completed-response and conversation-batch fallbacks and deduplication.
 
 **Stop** ends capture. **Clear** ends capture and removes the collected data. Starting a new capture replaces the previous session, so export first if needed.
 
@@ -39,7 +39,7 @@ Parsed summaries are stored in `chrome.storage.session`. The extension does not 
 
 This is an unofficial tool and is not affiliated with OpenAI. It displays only data exposed to the browser, not a complete view of ChatGPT’s internal retrieval system. Network formats can change and require parser updates.
 
-WebSocket messages can appear during generation. HTTP/SSE and conversation-batch results may appear only after the response finishes. Interrupted responses or targets outside the captured tab’s tree may not be available.
+WebSocket and fetch/SSE results can appear during generation. On Chrome versions without response streaming support, SSE falls back to reading the completed response. Conversation-batch results may arrive later. Interrupted responses or targets outside the captured tab’s tree may not be available.
 
 An empty list does not prove that no search occurred. A source reference does not prove the full page was read, and a link in the answer does not establish how much that source influenced it. Source counts are not counts of all internal search-engine calls. The same URL can appear under different reference types.
 
@@ -62,4 +62,10 @@ node --check background.js
 node --check panel.js
 node --check parser.js
 node --check progress.js
+```
+
+Run the synthetic regression tests with:
+
+```sh
+node --test tests/*.test.mjs
 ```

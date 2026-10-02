@@ -16,7 +16,7 @@ function cleanMessage(m) {
   return {id:m.id, author:{role:m.author?.role}, content:m.content, channel:m.channel, status:m.status, end_turn:m.end_turn, metadata};
 }
 export class Inspector {
-  constructor() { this.turns = new Map(); this.streams = new Map(); this.seen = new Set(); this.buffers = new Map(); this.warnings = new Set(); this.frames = 0; this.aliases = new Map(); }
+  constructor() { this.turns = new Map(); this.streams = new Map(); this.seen = new Set(); this.buffers = new Map(); this.warnings = new Set(); this.frames = 0; this.aliases = new Map(); this.deltaDefaults = new Map(); }
   warn(text) { this.warnings.add(text); }
   batch(input, conversationId) {
     try {
@@ -75,11 +75,18 @@ export class Inspector {
       const event = buffer.slice(0,end); buffer=buffer.slice(end+2);
       const data=event.split('\n').filter(l=>l.startsWith('data:')).map(l=>l.slice(5).replace(/^ /,'')).join('\n');
       if (!data || data==='[DONE]') continue;
-      try { const x=JSON.parse(data); if (x && typeof x==='object' && (x.v!==undefined || x.p!==undefined || x.message)) this.delta(x,key); }
+      try { const x=JSON.parse(data); if (x && typeof x==='object' && (x.v!==undefined || x.p!==undefined || x.message)) this.streamDelta(x,key); }
       catch { this.warn('Could not parse a stream event.'); }
     }
     if(buffer.length>2_000_000) {this.warn('An incomplete event exceeded the size limit.');buffer='';}
     this.buffers.set(key,buffer);
+  }
+  streamDelta(d,key) {
+    if(d.message || d.v?.message){this.deltaDefaults.delete(key);this.delta(d,key);return;}
+    const previous=this.deltaDefaults.get(key)||{};
+    const update={...d,p:d.p??previous.p,o:d.o??previous.o};
+    if(update.o)this.deltaDefaults.set(key,{p:update.p,o:update.o});
+    this.delta(update,key);
   }
   delta(d,key) {
     if(d.message) {this.streams.set(key,{message:cleanMessage(d.message)});this.message(d.message,key);return;}
@@ -89,7 +96,8 @@ export class Inspector {
     const parts=d.p.split('/').slice(1).map(p=>p.replace(/~1/g,'/').replace(/~0/g,'~'));
     if(parts.some(p=>['__proto__','prototype','constructor'].includes(p))) {this.warn('An invalid update path was rejected.');return;}
     if(parts[0]!=='message') return;
-    if(parts[1]==='metadata' && !allowedMeta.has(parts[2])) return;
+    if(parts[1]==='metadata' && parts.length>2 && !allowedMeta.has(parts[2])) return;
+    if(parts[1]==='metadata' && parts.length===2 && d.v && typeof d.v==='object')d={...d,v:Object.fromEntries(Object.entries(d.v).filter(([k])=>allowedMeta.has(k)))};
     if(!['metadata','content','status','end_turn','channel'].includes(parts[1])) return;
     const root=this.streams.get(key);
     if(!root){this.warn('The initial message is missing for some updates.');return;}
@@ -99,6 +107,7 @@ export class Inspector {
     if(!target || typeof target!=='object') {this.warn('Unknown delta path.');return;}
     if(d.o==='append' && typeof target[p]==='string' && typeof d.v==='string')target[p]+=d.v;
     else if(d.o==='append' && Array.isArray(target[p]) && Array.isArray(d.v))target[p].push(...d.v);
+    else if(d.o==='append' && target[p] && typeof target[p]==='object' && !Array.isArray(target[p]) && d.v && typeof d.v==='object' && !Array.isArray(d.v)){for(const [k,v] of Object.entries(d.v))if(!['__proto__','constructor','prototype'].includes(k))target[p][k]=structuredClone(v);}
     else if(['add','replace'].includes(d.o))target[p]=structuredClone(d.v);
     else if(d.o==='remove') {if(Array.isArray(target))target.splice(Number(p),1);else delete target[p];}
     else {this.warn('Unsupported delta operation.');return;}
@@ -125,7 +134,7 @@ export class Inspector {
     }
     if(m.channel==='final') {
       const text=m.content?.parts?.filter(p=>typeof p==='string').join('') || m.content?.text || '';
-      const refs=(meta.content_references||[]).flatMap(r=>[r.url,...(r.items||[]).map(i=>i.url)]).map(safeURL).filter(Boolean);
+      const refs=(meta.content_references||[]).flatMap(r=>[r.url,...(r.items||[]).map(i=>i.url),...(r.sources||[]).map(i=>i.url)]).map(safeURL).filter(Boolean);
       t.answerLinks=unique([...t.answerLinks,...links(text),...refs]);
       t.summaryQueries=unique([...(t.summaryQueries||[]),...(meta.map_search_model_queries||[]),...qs].filter(q=>typeof q==='string'));
       if(m.end_turn===true || m.status==='finished_successfully')t.finished=true;

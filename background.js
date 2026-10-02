@@ -1,4 +1,5 @@
 import {Inspector} from './parser.js';
+import {ResponseStream} from './response-stream.js';
 let inspector = new Inspector(), tabId=null, active=false, failure='', requests=new Map(), timer, cached=null;
 let progress={phase:'idle',since:Date.now()}, baseline='';
 const signature=()=>JSON.stringify(inspector.snapshot().turns.at(-1)||null);
@@ -82,17 +83,40 @@ chrome.debugger.onEvent.addListener((source,method,p)=>{
       }else if(p.response.opcode===2)inspector.warn('A binary frame was detected; this format is not supported.');
       publish();
     }
+    if(method==='Network.dataReceived' && p.data){
+      requests.get(ctx)?.stream?.write(p.data);
+    }
     if(method==='Network.responseReceived'){
       let url;try{url=new URL(p.response.url);}catch{return;}
       if(url.hostname==='chatgpt.com' && p.response.status===200){
         const kind=url.pathname==='/backend-api/conversations/batch'?'batch':p.response.mimeType?.includes('text/event-stream')?'sse':null;
-        if(kind){requests.set(ctx,{source,id:p.requestId,kind});if(kind==='sse' && ['armed','done'].includes(progress.phase))begin();}
+        if(kind){
+          const r={source,id:p.requestId,kind};requests.set(ctx,r);
+          if(kind==='sse'){
+            if(['armed','done'].includes(progress.phase))begin();
+            r.stream=new ResponseStream(text=>{
+              if(!active || eventCapture!==inspector)return;
+              inspector.sse(text,ctx);
+              if(inspector.snapshot().turns.at(-1)?.finished)settle();
+              publish();
+            });
+            r.streaming=debug(source,'Network.streamResourceContent',{requestId:p.requestId})
+              .then(result=>{r.stream.start(result.bufferedData);return true;})
+              .catch(()=>{r.stream=null;return false;});
+          }
+        }
       }
     }
-    // Fetch-based SSE is read after completion; WebSocket updates appear live.
+    // Prefer streamed bytes; use the completed response on older Chrome versions.
     if(method==='Network.loadingFinished' && requests.has(ctx)){
-      const r=requests.get(ctx);requests.delete(ctx);
-      if(r.kind==='pending'){phase('waiting');return;}
+      const r=requests.get(ctx);
+      if(r.kind==='pending'){requests.delete(ctx);phase('waiting');return;}
+      if(r.streaming && await r.streaming){
+        requests.delete(ctx);
+        if(!active || eventCapture!==inspector)return;
+        r.stream.finish();settle();publish();return;
+      }
+      requests.delete(ctx);
       const capture=inspector;
       if(progress.phase!=='done')phase('processing');
       const body=await debug(r.source,'Network.getResponseBody',{requestId:r.id});
